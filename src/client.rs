@@ -3,7 +3,8 @@ use std::time::Duration;
 
 use crate::error::KkhayError;
 use crate::types::{
-    CreateInvoiceRequest, CreateInvoiceResponse, GetInvoiceResponse, ListInvoicesResponse,
+    CreateInvoiceRequest, CreateInvoiceResponse, GetInvoiceResponse, HealthResponse,
+    ListInvoicesResponse,
 };
 
 #[derive(Clone, Debug)]
@@ -14,7 +15,7 @@ pub struct KkhayClient {
 }
 
 impl KkhayClient {
-    /// Create a new K Khay Client instance.
+    /// Create a new K Khay Gateway Client instance.
     pub fn new(api_key: impl Into<String>) -> Result<Self, KkhayError> {
         Self::with_options(api_key, "https://api.kkhay.com", Duration::from_secs(30))
     }
@@ -39,7 +40,7 @@ impl KkhayClient {
         );
         headers.insert(
             "User-Agent",
-            HeaderValue::from_static("kkhay-rust/1.0.0"),
+            HeaderValue::from_static("kkhay-rust/1.0.4"),
         );
 
         let http = reqwest::Client::builder()
@@ -59,7 +60,13 @@ impl KkhayClient {
         })
     }
 
-    fn get_url(&self, path: &str) -> String {
+    /// Returns the configured base URL.
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
+    /// Resolves an API path against the configured base URL.
+    pub fn get_url(&self, path: &str) -> String {
         let clean_path = if path.starts_with('/') {
             path.to_string()
         } else {
@@ -84,7 +91,7 @@ impl KkhayClient {
             ));
         }
 
-        let url = self.get_url("/v1/merchant/invoices");
+        let url = self.get_url("/v1/gateway/invoices");
         let resp = self
             .http
             .post(&url)
@@ -114,7 +121,7 @@ impl KkhayClient {
             return Err(KkhayError::Config("invoice_id cannot be empty".to_string()));
         }
 
-        let url = self.get_url(&format!("/v1/merchant/invoices/{}", clean_id));
+        let url = self.get_url(&format!("/v1/gateway/invoices/{}", clean_id));
         let resp = self.http.get(&url).send().await?;
 
         let status = resp.status().as_u16();
@@ -131,14 +138,14 @@ impl KkhayClient {
         Ok(result)
     }
 
-    /// List and paginate merchant invoices.
+    /// List and paginate gateway invoices.
     pub async fn list_invoices(
         &self,
         page: Option<u32>,
         limit: Option<u32>,
         status: Option<&str>,
     ) -> Result<ListInvoicesResponse, KkhayError> {
-        let mut url = self.get_url("/v1/merchant/invoices");
+        let mut url = self.get_url("/v1/gateway/invoices");
         let mut query = Vec::new();
         if let Some(p) = page {
             query.push(format!("page={}", p));
@@ -168,5 +175,23 @@ impl KkhayClient {
         let result = resp.json::<ListInvoicesResponse>().await?;
         Ok(result)
     }
-}
 
+    /// Check health status of the Gateway API.
+    pub async fn check_health(&self) -> Result<HealthResponse, KkhayError> {
+        let url = self.get_url("/health");
+        let resp = self.http.get(&url).send().await?;
+
+        let status = resp.status().as_u16();
+        if status >= 400 {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(KkhayError::Api {
+                status,
+                message: body,
+                code: None,
+            });
+        }
+
+        let result = resp.json::<HealthResponse>().await?;
+        Ok(result)
+    }
+}
