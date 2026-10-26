@@ -52,7 +52,49 @@ fn test_parse_webhook() {
     let event = parse_webhook_event(payload, &valid_sig, secret).unwrap();
     assert_eq!(event.event, "invoice.paid");
     assert_eq!(event.invoice_id, "inv_abc");
+    assert_eq!(event.order_id.as_deref(), Some("ORD-55"));
+    assert_eq!(event.price_amount, Some(50.0));
+    assert_eq!(event.price_currency.as_deref(), Some("USD"));
+    assert_eq!(event.pay_amount.as_deref(), Some("50.00"));
     assert_eq!(event.pay_token.as_deref(), Some("USDT"));
+    assert_eq!(event.pay_network.as_deref(), Some("bsc"));
+    assert_eq!(event.deposit_address.as_deref(), Some("0x123"));
+    assert_eq!(event.tx_hash.as_deref(), Some("0xabc"));
+    assert_eq!(event.status, "PAID");
+}
+
+#[test]
+fn test_parse_webhook_camel_case() {
+    let secret = "whsec_test_secret";
+    let payload = br#"{
+        "event": "invoice.paid",
+        "invoiceId": "inv_xyz",
+        "orderId": "ORD-99",
+        "priceAmount": 100.0,
+        "priceCurrency": "USD",
+        "payAmount": "100.00",
+        "payToken": "USDC",
+        "payNetwork": "solana",
+        "depositAddress": "SolAddress123",
+        "txHash": "sol_tx_hash_456",
+        "status": "PAID"
+    }"#;
+
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+    mac.update(payload);
+    let valid_sig = hex::encode(mac.finalize().into_bytes());
+
+    let event = parse_webhook_event(payload, &valid_sig, secret).unwrap();
+    assert_eq!(event.event, "invoice.paid");
+    assert_eq!(event.invoice_id, "inv_xyz");
+    assert_eq!(event.order_id.as_deref(), Some("ORD-99"));
+    assert_eq!(event.price_amount, Some(100.0));
+    assert_eq!(event.price_currency.as_deref(), Some("USD"));
+    assert_eq!(event.pay_amount.as_deref(), Some("100.00"));
+    assert_eq!(event.pay_token.as_deref(), Some("USDC"));
+    assert_eq!(event.pay_network.as_deref(), Some("solana"));
+    assert_eq!(event.deposit_address.as_deref(), Some("SolAddress123"));
+    assert_eq!(event.tx_hash.as_deref(), Some("sol_tx_hash_456"));
     assert_eq!(event.status, "PAID");
 }
 

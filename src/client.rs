@@ -65,6 +65,11 @@ impl KkhayClient {
         &self.base_url
     }
 
+    /// Returns the configured API key.
+    pub fn api_key(&self) -> &str {
+        &self.api_key
+    }
+
     /// Resolves an API path against the configured base URL.
     pub fn get_url(&self, path: &str) -> String {
         let clean_path = if path.starts_with('/') {
